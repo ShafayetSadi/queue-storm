@@ -156,14 +156,27 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## Run with Docker (primary)
 
-```bash
-# 1. Provide env (key optional; service runs deterministically without it)
-cp .env.example .env   # set OPENROUTER_API_KEY for the full hybrid
+> **Required for Docker Compose:** create `.env` before running Compose. The
+> compose file intentionally reads `env_file: .env`, so the command below is not
+> optional for a fresh checkout.
 
-# 2a. Docker Compose
+```bash
+# 1. Required: create the env file from the template
+cp .env.example .env
+
+# 2. If you do NOT have an OpenRouter API key, keep the service fully
+# deterministic and network-free by setting this in .env:
+# USE_LLM=false
+# OPENROUTER_API_KEY=
+
+# 3. If you want the full hybrid LLM mode, set this in .env instead:
+# USE_LLM=true
+# OPENROUTER_API_KEY=<your-openrouter-key>
+
+# 4a. Docker Compose
 docker compose up --build
 
-# 2b. or plain Docker
+# 4b. or plain Docker
 docker build -t queuestorm-investigator .
 docker run -p 8000:8000 --env-file .env queuestorm-investigator
 ```
