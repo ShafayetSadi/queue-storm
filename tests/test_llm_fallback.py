@@ -61,17 +61,22 @@ def test_llm_invalid_enum_is_rejected():
     assert "llm_fallback" in (res.reason_codes or [])
 
 
-def test_llm_cannot_override_automatic_fields():
-    # Even a valid LLM response cannot invent a transaction id or department.
+def test_llm_cannot_override_scored_fields():
+    # Even a valid LLM response cannot change deterministic investigation results.
     payload = {
-        "agent_summary": "summary",
-        "evidence_verdict": "consistent",
-        "case_type": "wrong_transfer",
-        "severity": "high",
-        "human_review_required": True,
+        "agent_summary": "LLM summary",
+        "evidence_verdict": "inconsistent",
+        "case_type": "refund_request",
+        "severity": "low",
+        "human_review_required": False,
         "recommended_next_action": "Verify the transaction.",
         "customer_reply": "We have noted your concern.",
     }
     res = analyze_ticket(WRONG_TRANSFER, settings=LLM_ON, llm_client=_FakeClient(payload))
-    assert res.relevant_transaction_id == "TXN-9101"  # from the matcher, not the LLM
-    assert res.department == "dispute_resolution"  # lookup from case_type
+    assert res.relevant_transaction_id == "TXN-9101"
+    assert res.case_type == "wrong_transfer"
+    assert res.evidence_verdict == "consistent"
+    assert res.severity == "high"
+    assert res.human_review_required is True
+    assert res.department == "dispute_resolution"
+    assert res.agent_summary == "LLM summary"

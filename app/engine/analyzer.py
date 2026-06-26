@@ -2,14 +2,13 @@
 
 Flow (single ordered LLM call, deterministic floor):
   normalize -> features -> safety prescan -> deterministic transaction pick ->
-  deterministic baseline (always) -> [LLM primary, validated] -> fill automatic
-  fields (ticket_id / relevant_transaction_id / department) -> safety sanitize ->
-  final schema validation.
+  deterministic baseline (always) -> [optional LLM text enrichment, validated] ->
+  safety sanitize -> final schema validation.
 
-The LLM owns case_type / evidence_verdict / severity / human_review and the free
-text. It can never set ticket_id, relevant_transaction_id, or department, and
-its output is discarded if it fails validation — in which case the deterministic
-baseline is returned. Either way the response is always valid and safe.
+The deterministic engine owns all scored decision fields. The LLM may only
+improve narrative text plus optional confidence / reason codes. If the LLM
+fails validation, the deterministic baseline is returned unchanged. Either way
+the response is always valid and safe.
 """
 
 from __future__ import annotations
@@ -18,7 +17,6 @@ import time
 from typing import Optional
 
 from app.core.config import Settings, get_settings
-from app.core.constants import DEPARTMENT_BY_CASE_TYPE
 from app.core.logging import log_event
 from app.engine import safety
 from app.engine.classifier import classify_case
@@ -31,14 +29,6 @@ from app.engine.verdict import decide_verdict
 from app.llm.client import LLMClient
 from app.llm.investigator import run_investigator
 from app.models.schemas import AnalyzeTicketRequest, AnalyzeTicketResponse
-
-
-def _department_for(case_type: str, verdict: str) -> str:
-    if case_type == "refund_request" and verdict == "inconsistent":
-        return "dispute_resolution"
-    return DEPARTMENT_BY_CASE_TYPE.get(case_type, "customer_support")
-
-
 def _deterministic_response(
     norm: NormalizedRequest, features, match: MatchResult
 ) -> dict:
@@ -64,25 +54,16 @@ def _deterministic_response(
     }
 
 
-def _llm_response(llm: dict, norm: NormalizedRequest, match: MatchResult) -> dict:
-    case_type = llm["case_type"]
-    verdict = llm["evidence_verdict"]
-    return {
-        # Automatic / deterministic fields — never from the LLM.
-        "ticket_id": norm.request.ticket_id,
-        "relevant_transaction_id": match.relevant_transaction_id,
-        "department": _department_for(case_type, verdict),
-        # LLM-owned reasoning + text.
-        "evidence_verdict": verdict,
-        "case_type": case_type,
-        "severity": llm["severity"],
-        "agent_summary": llm["agent_summary"],
-        "recommended_next_action": llm["recommended_next_action"],
-        "customer_reply": llm["customer_reply"],
-        "human_review_required": llm["human_review_required"],
-        "confidence": llm.get("confidence"),
-        "reason_codes": llm.get("reason_codes", []),
-    }
+def _llm_response(llm: dict, baseline: dict) -> dict:
+    response = dict(baseline)
+    response["agent_summary"] = llm["agent_summary"]
+    response["recommended_next_action"] = llm["recommended_next_action"]
+    response["customer_reply"] = llm["customer_reply"]
+    if llm.get("confidence") is not None:
+        response["confidence"] = llm["confidence"]
+    if llm.get("reason_codes"):
+        response["reason_codes"] = llm["reason_codes"]
+    return response
 
 
 def analyze_ticket(
@@ -106,8 +87,8 @@ def analyze_ticket(
     if settings.llm_enabled:
         llm = run_investigator(norm, match, client=llm_client)
         if llm is not None:
-            response = _llm_response(llm, norm, match)
-            source = "llm"
+            response = _llm_response(llm, baseline)
+            source = "llm_text"
         else:
             response = baseline
             source = "deterministic_fallback"
