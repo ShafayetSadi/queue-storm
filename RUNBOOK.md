@@ -36,11 +36,10 @@ curl -fsS http://localhost:8000/health
 
 ```bash
 cd queue-storm
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv sync --dev
 cp .env.example .env            # optional
 
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ## Configuration
@@ -58,7 +57,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ```bash
 curl -fsS http://localhost:8000/health
-python scripts/run_sample_cases.py --base-url http://localhost:8000
+uv run python scripts/run_sample_cases.py --base-url http://localhost:8000
 ```
 
 ## Troubleshooting

@@ -29,7 +29,7 @@ trace, token, or secret).
 
 ## Tech stack
 
-- **Python 3.11**, **FastAPI**, **Uvicorn**, **Pydantic v2**
+- **Python 3.12**, **FastAPI**, **Uvicorn**, **Pydantic v2**
 - **OpenRouter** (OpenAI-compatible) for the optional/primary LLM call
 - No database, no GPU, no model baked into the image — the deterministic path
   has **zero network dependency**.
@@ -121,13 +121,12 @@ the critical path for correctness or safety.
 ## Setup & run (local)
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv sync --dev
 
 # Optional: enable the LLM
 cp .env.example .env   # then set OPENROUTER_API_KEY=...
 
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ## Run with Docker (primary)
@@ -189,9 +188,9 @@ Outputs for all 10 public cases: [`samples/sample_outputs.json`](samples/sample_
 ## Testing
 
 ```bash
-pytest -q
+uv run pytest -q
 # Against a running service:
-python scripts/run_sample_cases.py --base-url http://localhost:8000
+uv run python scripts/run_sample_cases.py --base-url http://localhost:8000
 BASE_URL=http://localhost:8000 ./scripts/smoke_test.sh
 ```
 
