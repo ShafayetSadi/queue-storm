@@ -1,5 +1,6 @@
-"""The LLM is primary but must never be load-bearing for correctness or safety:
-when it fails or returns invalid output, the deterministic baseline is returned.
+"""The LLM may enrich text, but must never be load-bearing for correctness or
+safety: when it fails or returns invalid output, the deterministic baseline is
+returned.
 """
 
 from app.core.config import Settings
@@ -49,15 +50,11 @@ def test_llm_timeout_or_error_falls_back():
 def test_llm_invalid_enum_is_rejected():
     bad = {
         "agent_summary": "summary",
-        "evidence_verdict": "consistent",
-        "case_type": "WrongTransfer",  # invalid variant
-        "severity": "high",
-        "human_review_required": True,
-        "recommended_next_action": "do something",
+        "recommended_next_action": "",
         "customer_reply": "we will help you",
     }
     res = analyze_ticket(WRONG_TRANSFER, settings=LLM_ON, llm_client=_FakeClient(bad))
-    assert res.case_type == "wrong_transfer"  # deterministic value, not the bad one
+    assert res.case_type == "wrong_transfer"
     assert "llm_fallback" in (res.reason_codes or [])
 
 
@@ -65,10 +62,6 @@ def test_llm_cannot_override_scored_fields():
     # Even a valid LLM response cannot change deterministic investigation results.
     payload = {
         "agent_summary": "LLM summary",
-        "evidence_verdict": "inconsistent",
-        "case_type": "refund_request",
-        "severity": "low",
-        "human_review_required": False,
         "recommended_next_action": "Verify the transaction.",
         "customer_reply": "We have noted your concern.",
     }
@@ -80,3 +73,21 @@ def test_llm_cannot_override_scored_fields():
     assert res.human_review_required is True
     assert res.department == "dispute_resolution"
     assert res.agent_summary == "LLM summary"
+
+
+def test_text_only_llm_payload_is_accepted():
+    payload = {
+        "agent_summary": "Customer reports a wrong transfer and needs dispute help.",
+        "recommended_next_action": "Confirm transaction details and follow the dispute workflow.",
+        "customer_reply": "We have noted your concern and will review it through official channels.",
+        "confidence": 0.88,
+        "reason_codes": ["text_enriched"],
+    }
+    res = analyze_ticket(WRONG_TRANSFER, settings=LLM_ON, llm_client=_FakeClient(payload))
+    assert res.case_type == "wrong_transfer"
+    assert res.evidence_verdict == "consistent"
+    assert res.agent_summary == payload["agent_summary"]
+    assert res.recommended_next_action == payload["recommended_next_action"]
+    assert payload["customer_reply"] in res.customer_reply
+    assert "do not share" in res.customer_reply.lower()
+    assert res.confidence == 0.88

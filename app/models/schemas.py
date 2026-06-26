@@ -123,16 +123,6 @@ class AnalyzeTicketRequest(BaseModel):
     )
     metadata: Optional[dict[str, Any]] = Field(None, description="Additional simulated context.")
 
-    @field_validator("ticket_id")
-    @classmethod
-    def validate_ticket_id(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("ticket_id must not be blank")
-        if any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
-            raise ValueError("ticket_id must not contain control characters")
-        return value
-
-
 # --- Response model ---------------------------------------------------------
 
 

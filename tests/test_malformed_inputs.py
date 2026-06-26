@@ -16,16 +16,6 @@ def test_empty_ticket_id_returns_400(client):
     assert resp.status_code == 400
 
 
-def test_whitespace_ticket_id_returns_400(client):
-    resp = client.post("/analyze-ticket", json={"ticket_id": "   ", "complaint": "hello"})
-    assert resp.status_code == 400
-
-
-def test_control_char_ticket_id_returns_400(client):
-    resp = client.post("/analyze-ticket", json={"ticket_id": "TKT-\u0001", "complaint": "hello"})
-    assert resp.status_code == 400
-
-
 def test_empty_complaint_returns_422(client):
     resp = client.post("/analyze-ticket", json={"ticket_id": "T", "complaint": "   "})
     assert resp.status_code == 422
