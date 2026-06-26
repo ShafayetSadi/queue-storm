@@ -15,6 +15,7 @@ always valid even if the model errs.
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from typing import Optional
 
 from app.engine.matcher import MatchResult
@@ -196,13 +197,18 @@ def _validate(data: dict, baseline: dict) -> dict:
     return result
 
 
+@lru_cache
+def get_llm_client() -> LLMClient:
+    return LLMClient()
+
+
 def run_investigator(
     norm: NormalizedRequest,
     match: MatchResult,
     baseline: dict,
     client: Optional[LLMClient] = None,
 ) -> Optional[dict]:
-    client = client or LLMClient()
+    client = client or get_llm_client()
     if not client.available:
         return None
     raw = client.complete_json(
