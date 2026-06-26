@@ -1,62 +1,46 @@
 """HTTP endpoints: GET /health and POST /analyze-ticket.
 
-Status codes follow Section 4.1: 200 success, 400 malformed/missing required,
-422 semantically empty complaint, 500 controlled internal error. The body is
-parsed manually so we can return 400 (not FastAPI's default 422) for missing
-required fields, and never leak stack traces.
+The request body is declared as ``AnalyzeTicketRequest`` so the OpenAPI/Swagger
+docs render every field. Status codes follow Section 4.1: 200 success, 400
+malformed/missing required (mapped from FastAPI's validation error in
+``app.main``), 422 semantically empty complaint, 500 controlled internal error.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 
 from app.core.logging import log_event
 from app.engine.analyzer import analyze_ticket
-from app.models.schemas import AnalyzeTicketRequest
+from app.models.schemas import AnalyzeTicketRequest, AnalyzeTicketResponse, HealthResponse
 
 router = APIRouter()
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse)
 def health() -> dict:
     return {"status": "ok"}
 
 
-@router.post("/analyze-ticket")
-async def analyze(request: Request):
-    # 1. Valid JSON object?
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Invalid request body. Please provide valid JSON."},
-        )
-    if not isinstance(body, dict):
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Request body must be a JSON object."},
-        )
-
-    # 2. Required fields / types present?
-    try:
-        payload = AnalyzeTicketRequest(**body)
-    except ValidationError:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "Missing or invalid required fields (ticket_id, complaint)."},
-        )
-
-    # 3. Semantically usable complaint?
+@router.post(
+    "/analyze-ticket",
+    response_model=AnalyzeTicketResponse,
+    responses={
+        400: {"description": "Malformed JSON or missing required fields."},
+        422: {"description": "Schema valid but complaint is semantically empty."},
+        500: {"description": "Controlled internal error (no sensitive details)."},
+    },
+)
+async def analyze(payload: AnalyzeTicketRequest):
+    # Schema is already validated by FastAPI (400 via the validation handler).
+    # Only the semantic check remains: an empty complaint -> 422.
     if not (payload.complaint or "").strip():
         return JSONResponse(
             status_code=422,
             content={"error": "Complaint text is empty."},
         )
 
-    # 4. Analyze (controlled 500 on unexpected failure).
     try:
         result = analyze_ticket(payload)
     except Exception as exc:  # pragma: no cover - defensive

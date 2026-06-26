@@ -7,6 +7,7 @@ non-sensitive JSON body — never a stack trace, token, or secret.
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.routes import router
@@ -19,6 +20,18 @@ app = FastAPI(
 )
 
 app.include_router(router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # Per the spec, malformed JSON / missing required fields are 400 (not 422).
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "Invalid request body. Provide valid JSON with the required "
+            "fields (ticket_id, complaint)."
+        },
+    )
 
 
 @app.exception_handler(Exception)
