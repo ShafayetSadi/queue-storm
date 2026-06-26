@@ -25,12 +25,21 @@ from app.engine.normalizer import NormalizedRequest
 
 _SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 _BANGLA_RE = re.compile(r"[ঀ-৿]")
-_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+_URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
+_PHONE_CONTACT_RE = re.compile(
+    r"(?:call|dial|message|sms|text|contact|whatsapp|telegram)\D{0,30}"
+    r"\+?\d[\d\s().-]{6,}\d",
+    re.IGNORECASE,
+)
 
 # A request for a secret credential: a request verb followed (within a few
 # words) by a credential noun. Negated mentions ("never ask for your PIN",
 # "do not share your OTP") are allowed and excluded below.
-_CRED_NOUN = r"(?:pin|otp|password|card\s*number|full\s*card|cvv|secret\s*credential)"
+_CRED_NOUN = (
+    r"(?:pin|otp|one[-\s]*time\s*password|password|verification\s*code"
+    r"|security\s*code|card\s*number|full\s*card(?:\s*number)?|cvv|cvc"
+    r"|secret\s*credential)"
+)
 _CRED_REQUEST_RE = re.compile(
     r"(?:ask(?:ing)?(?:\s+\w+){0,3}\s+for|share|send|provide|give|enter|submit"
     r"|type|tell\s+\w+|need|reveal|verify\s+with)\s+(?:your|their|the|me|us\s+your)?\s*"
@@ -43,7 +52,10 @@ _CRED_NOUN_BN_RE = re.compile(r"(পিন|ওটিপি|পাসওয়া
 _THIRD_PARTY_PATTERNS = (
     "call this number", "call the number", "contact this number",
     "whatsapp", "telegram", "click this link", "click the link",
-    "dial this", "message this number",
+    "open this link", "use this link", "dial this", "message this number",
+    "contact the merchant directly", "contacting the merchant directly",
+    "contact merchant directly", "reach the merchant directly",
+    "merchant directly",
 )
 _SAFE_PRESENCE_HINTS = (
     "do not share", "never ask", "never share", "without sharing",
@@ -87,6 +99,20 @@ def _requests_credential(text: str) -> bool:
     return False
 
 
+def _promises_unauthorized_action(text: str) -> bool:
+    """True if output claims financial/account authority the service lacks."""
+    return _contains_any(text, constants.UNSAFE_PROMISE_PATTERNS)
+
+
+def _redirects_to_third_party(text: str) -> bool:
+    """True if output sends the customer to a non-official contact path."""
+    return (
+        bool(_URL_RE.search(text))
+        or bool(_PHONE_CONTACT_RE.search(text))
+        or _contains_any(text, _THIRD_PARTY_PATTERNS)
+    )
+
+
 def _safe_reply(bangla: bool) -> str:
     return constants.DEFAULT_SAFE_REPLY_BN if bangla else constants.DEFAULT_SAFE_REPLY_EN
 
@@ -115,12 +141,22 @@ def sanitize(response: dict, ctx: SafetyContext) -> dict:
 
     reply = str(response.get("customer_reply") or "")
     action = str(response.get("recommended_next_action") or "")
+    reply_requests_credential = _requests_credential(reply)
+    action_requests_credential = _requests_credential(action)
+    reply_promises_action = _promises_unauthorized_action(reply)
+    action_promises_action = _promises_unauthorized_action(action)
+    reply_redirects = _redirects_to_third_party(reply)
+    action_redirects = _redirects_to_third_party(action)
+
+    credential_guardrail = reply_requests_credential or action_requests_credential
+    promise_guardrail = reply_promises_action or action_promises_action
+    third_party_guardrail = reply_redirects or action_redirects
 
     # 1. Credential requests anywhere -> replace the offending field entirely.
-    if _requests_credential(reply):
+    if reply_requests_credential:
         reply = _safe_reply(bangla)
         unsafe_template_used = True
-    if _requests_credential(action):
+    if action_requests_credential:
         action = (
             "Escalate to the fraud_risk team and never request the customer's "
             "PIN, OTP, password, or card number."
@@ -128,10 +164,10 @@ def sanitize(response: dict, ctx: SafetyContext) -> dict:
         unsafe_template_used = True
 
     # 2. Unauthorized refund/reversal/unblock promises -> safe eligibility wording.
-    if _contains_any(reply, constants.UNSAFE_PROMISE_PATTERNS):
+    if reply_promises_action:
         reply = _safe_reply(bangla)
         unsafe_template_used = True
-    if _contains_any(action, constants.UNSAFE_PROMISE_PATTERNS):
+    if action_promises_action:
         action = (
             "Verify eligibility through official policy; "
             + constants.SAFE_REFUND_LANGUAGE + "."
@@ -139,10 +175,10 @@ def sanitize(response: dict, ctx: SafetyContext) -> dict:
         unsafe_template_used = True
 
     # 3. Third-party redirects / external links -> safe template.
-    if _URL_RE.search(reply) or _contains_any(reply, _THIRD_PARTY_PATTERNS):
+    if reply_redirects:
         reply = _safe_reply(bangla)
         unsafe_template_used = True
-    if _URL_RE.search(action) or _contains_any(action, _THIRD_PARTY_PATTERNS):
+    if action_redirects:
         action = (
             "Direct the customer only to official support channels; do not refer "
             "them to any third-party contact."
@@ -160,6 +196,12 @@ def sanitize(response: dict, ctx: SafetyContext) -> dict:
     # 5. Reason codes for transparency.
     if unsafe_template_used:
         _add_reason(response, "safe_template_applied")
+    if credential_guardrail:
+        _add_reason(response, "credential_guardrail")
+    if promise_guardrail:
+        _add_reason(response, "unauthorized_promise_guardrail")
+    if third_party_guardrail:
+        _add_reason(response, "third_party_guardrail")
     if ctx.prompt_injection:
         _add_reason(response, "prompt_injection_ignored")
     if ctx.credential_shared:

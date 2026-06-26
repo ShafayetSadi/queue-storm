@@ -12,9 +12,10 @@ from pathlib import Path
 
 import pytest
 
-# Ensure the LLM is disabled for the default test client.
-os.environ.setdefault("USE_LLM", "false")
-os.environ.setdefault("OPENROUTER_API_KEY", "")
+# Ensure the LLM is disabled for the default test client, even if the shell has
+# deployment-like variables exported.
+os.environ["USE_LLM"] = "false"
+os.environ["OPENROUTER_API_KEY"] = ""
 
 from app.main import app  # noqa: E402
 from tests.helpers.client import TestClient

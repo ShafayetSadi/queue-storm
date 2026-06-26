@@ -144,11 +144,17 @@ PIN_OTP_WARNING_BN = (
 UNSAFE_PROMISE_PATTERNS = (
     "we will refund you", "we will refund", "we have refunded", "we refunded",
     "we are refunding", "refunded your", "your refund has been", "i will refund",
+    "i'll refund", "we'll refund", "refund has been processed",
+    "refund is complete", "we will return your money",
+    "we have returned your money", "money returned", "your money is returned",
     "we will reverse", "we have reversed", "we reversed", "i reversed",
-    "reversed it", "reversed your", "reversal is complete", "reversal done",
+    "i'll reverse", "we'll reverse", "reversed it", "reversed your",
+    "reversal is complete", "reversal done",
     "your money has been recovered", "we recovered", "we have recovered",
+    "we will recover", "we'll recover", "recovery is complete",
     "your account will be unblocked", "we have unblocked", "we unblocked",
-    "account has been unblocked", "money has been returned to you",
+    "we will unblock", "we'll unblock", "account has been unblocked",
+    "account is unblocked", "money has been returned to you",
 )
 
 # Safe refund language (used in builder and as sanitizer replacement).

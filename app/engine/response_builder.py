@@ -268,13 +268,12 @@ def _templates(norm, features, match, case_type, verdict, tid, amount,
         )
         action = (
             "Inform the customer that refund eligibility depends on the merchant's "
-            "policy. Provide guidance on contacting the merchant directly."
+            "policy. Guide any next steps through official support channels."
         )
         reply = (
             "Thank you for reaching out. Refunds for completed merchant payments "
-            "depend on the merchant's own policy. We recommend contacting the "
-            "merchant directly. If you need help reaching them, please reply and we "
-            f"will guide you. {warn}"
+            "depend on policy verification. Our support team can guide the next "
+            f"steps through official channels, and {safe_refund}. {warn}"
         )
         return summary, action, reply
 
