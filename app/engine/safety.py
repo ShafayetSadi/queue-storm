@@ -49,6 +49,17 @@ _CRED_REQUEST_RE = re.compile(
 _NEGATIONS = ("never", "do not", "don't", "dont", "won't", "wont", "not ", "without")
 # Bangla negated credential mention (e.g. "পিন ... শেয়ার করবেন না").
 _CRED_NOUN_BN_RE = re.compile(r"(পিন|ওটিপি|পাসওয়ার্ড)")
+_CRED_REQUEST_BN_RE = re.compile(
+    r"(পিন|ওটিপি|পাসওয়ার্ড|কার্ড\s*নম্বর|সিভিভি|সিকিউরিটি\s*কোড)"
+    r".{0,24}"
+    r"(দিন|দিবেন|দাও|পাঠান|পাঠাবেন|শেয়ার|শেয়ার|জানান|বলুন|লিখুন|প্রদান|ভেরিফাই)",
+)
+_CRED_NEGATION_BN_RE = re.compile(
+    r"(পিন|ওটিপি|পাসওয়ার্ড|কার্ড\s*নম্বর|সিভিভি|সিকিউরিটি\s*কোড)"
+    r".{0,32}"
+    r"(শেয়ার|শেয়ার|দিবেন|দিন|জানাবেন|জানান|বলবেন|বলুন|পাঠাবেন|পাঠান)"
+    r".{0,16}(না|নয়|নয়)",
+)
 _THIRD_PARTY_PATTERNS = (
     "call this number", "call the number", "contact this number",
     "whatsapp", "telegram", "click this link", "click the link",
@@ -56,6 +67,22 @@ _THIRD_PARTY_PATTERNS = (
     "contact the merchant directly", "contacting the merchant directly",
     "contact merchant directly", "reach the merchant directly",
     "merchant directly",
+)
+_UNAUTHORIZED_PROMISE_RE = re.compile(
+    r"\b(?:we|i|our\s+team|the\s+team)\s+(?:will|shall|can|have|has|already|now)"
+    r".{0,32}\b(?:refund|refunded|reverse|reversed|reversal|recover|recovered"
+    r"|unblock|unblocked|unlock|unlocked)\b"
+    r"|"
+    r"\b(?:refund|reversal|recovery|unblock|unlock)\b.{0,24}"
+    r"\b(?:approved|confirmed|complete|completed|processed|done|successful)\b"
+    r"|"
+    r"\b(?:your\s+money|the\s+amount)\s+(?:will\s+be|has\s+been|is)\s+"
+    r"(?:returned|refunded|reversed|recovered)\b",
+    re.IGNORECASE,
+)
+_UNAUTHORIZED_PROMISE_BN_RE = re.compile(
+    r"(রিফান্ড|ফেরত|রিভার্স|আনব্লক|রিকভার).{0,28}"
+    r"(করে\s*দিয়েছি|করে\s*দিব|করব|হয়ে\s*গেছে|সম্পন্ন|প্রসেস|নিশ্চিত|অনুমোদিত)",
 )
 _SAFE_PRESENCE_HINTS = (
     "do not share", "never ask", "never share", "without sharing",
@@ -96,12 +123,18 @@ def _requests_credential(text: str) -> bool:
         preceding = low[max(0, m.start() - 14): m.start()]
         if not any(neg in preceding for neg in _NEGATIONS):
             return True
+    if _CRED_REQUEST_BN_RE.search(text) and not _CRED_NEGATION_BN_RE.search(text):
+        return True
     return False
 
 
 def _promises_unauthorized_action(text: str) -> bool:
     """True if output claims financial/account authority the service lacks."""
-    return _contains_any(text, constants.UNSAFE_PROMISE_PATTERNS)
+    return (
+        _contains_any(text, constants.UNSAFE_PROMISE_PATTERNS)
+        or bool(_UNAUTHORIZED_PROMISE_RE.search(text))
+        or bool(_UNAUTHORIZED_PROMISE_BN_RE.search(text))
+    )
 
 
 def _redirects_to_third_party(text: str) -> bool:

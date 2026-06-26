@@ -132,6 +132,37 @@ def test_bangla_safe_template_used_for_unsafe_reply():
     assert "credential_guardrail" in response["reason_codes"]
 
 
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "আপনার ওটিপি দিন।",
+        "ভেরিফাই করতে পিন শেয়ার করুন।",
+        "কার্ড নম্বর এবং সিভিভি পাঠান।",
+    ],
+)
+def test_sanitizer_blocks_bangla_credential_requests(reply):
+    response = safety.sanitize(
+        _base_response(reply, "Review internally."), _ctx(bangla=True)
+    )
+    assert not safety._requests_credential(response["customer_reply"])
+    assert "credential_guardrail" in response["reason_codes"]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Your refund has been approved.",
+        "The reversal has been processed.",
+        "Our team will unlock your account now.",
+        "আপনার টাকা রিফান্ড করে দিব।",
+    ],
+)
+def test_sanitizer_blocks_paraphrased_unauthorized_promises(reply):
+    response = safety.sanitize(_base_response(reply, "Review internally."), _ctx())
+    assert not safety._promises_unauthorized_action(response["customer_reply"])
+    assert "unauthorized_promise_guardrail" in response["reason_codes"]
+
+
 def test_phishing_is_critical_and_escalated(client):
     body, reply, _ = _reply_action(
         client,
