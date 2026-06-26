@@ -132,13 +132,13 @@ def _templates(norm, features, match, case_type, verdict, tid, amount, counterpa
         if match.ambiguous:
             summary = (
                 f"Customer reports an issue involving {amount} BDT, but multiple "
-                "transactions plausibly match and the correct one cannot be "
-                "determined without more detail."
+                "transactions plausibly match. No single relevant transaction can "
+                "be selected safely from the provided history."
             )
             action = (
-                "Reply to the customer asking for a disambiguating detail (e.g. "
-                "the recipient's number) to identify the correct transaction. Do "
-                "not initiate any dispute until the transaction is confirmed."
+                "Ask for a disambiguating detail such as recipient number, exact "
+                "time, or transaction ID. Do not initiate dispute, refund, or "
+                "reversal until the relevant transaction is confirmed."
             )
             if bangla:
                 reply = (
@@ -154,12 +154,12 @@ def _templates(norm, features, match, case_type, verdict, tid, amount, counterpa
             return summary, action, reply
         # vague
         summary = (
-            "Customer reports a vague concern without specifying a transaction, "
-            "amount, or issue. Insufficient detail to identify any transaction."
+            "Customer reports a concern, but the provided complaint/history is "
+            "insufficient to identify a relevant transaction or verify the claim."
         )
         action = (
-            "Reply to the customer asking for specifics: which transaction, what "
-            "amount, what went wrong, and the approximate time."
+            "Ask for the transaction ID, amount, approximate time, and what went "
+            "wrong. Keep the case in clarification status until evidence is available."
         )
         if bangla:
             reply = (
@@ -205,14 +205,24 @@ def _templates(norm, features, match, case_type, verdict, tid, amount, counterpa
         return summary, action, reply
 
     if case_type == "payment_failed":
-        summary = (
-            f"Customer attempted a {amount} BDT payment ({tid}) which failed but "
-            "reports the balance was deducted. Requires payments operations review."
-        )
-        action = (
-            f"Investigate {tid} ledger status. If the balance was deducted on a "
-            "failed payment, initiate the standard reversal flow within SLA."
-        )
+        if verdict == "inconsistent":
+            summary = (
+                f"Customer claims a {amount} BDT payment failed, but transaction "
+                f"{tid} in the provided history does not support that claim."
+            )
+            action = (
+                f"Review {tid}'s verified ledger status before taking action. Do "
+                "not confirm any refund or reversal without policy approval."
+            )
+        else:
+            summary = (
+                f"Customer attempted a {amount} BDT payment ({tid}) which failed but "
+                "reports the balance was deducted. Requires payments operations review."
+            )
+            action = (
+                f"Investigate {tid} ledger status. If eligible under policy, handle "
+                "the case through the standard official reversal workflow."
+            )
         reply = (
             f"We have noted that transaction {tid} may have caused an unexpected "
             f"balance deduction. Our payments team will review the case and "
@@ -221,14 +231,24 @@ def _templates(norm, features, match, case_type, verdict, tid, amount, counterpa
         return summary, action, reply
 
     if case_type == "duplicate_payment":
-        summary = (
-            f"Customer reports a duplicate payment of {amount} BDT. Two matching "
-            f"payments were found; {tid} is likely the duplicate."
-        )
-        action = (
-            f"Verify the duplicate with payments_ops. If the biller confirms only "
-            f"one payment was received, initiate reversal of {tid}."
-        )
+        if verdict == "inconsistent":
+            summary = (
+                f"Customer reports a duplicate payment of {amount} BDT, but the "
+                "provided history does not show a confirmed duplicate."
+            )
+            action = (
+                f"Review {tid} and ask for any additional transaction reference if "
+                "needed. Do not treat the duplicate as confirmed yet."
+            )
+        else:
+            summary = (
+                f"Customer reports a duplicate payment of {amount} BDT. Matching "
+                f"payment evidence was found; {tid} is likely one duplicate entry."
+            )
+            action = (
+                "Verify the duplicate with payments_ops and handle any eligible "
+                "reversal through the official workflow."
+            )
         reply = (
             f"We have noted the possible duplicate payment for transaction {tid}. "
             f"Our payments team will verify with the biller and {safe_refund}. {warn}"
@@ -259,14 +279,24 @@ def _templates(norm, features, match, case_type, verdict, tid, amount, counterpa
         return summary, action, reply
 
     if case_type == "merchant_settlement_delay":
-        summary = (
-            f"Merchant reports a {amount} BDT settlement ({tid}) delayed beyond the "
-            "expected window. Settlement status is pending."
-        )
-        action = (
-            f"Route to merchant_operations to verify the settlement batch status for "
-            f"{tid}. If delayed, communicate a revised ETA to the merchant."
-        )
+        if verdict == "inconsistent":
+            summary = (
+                f"Merchant reports delayed settlement of {amount} BDT, but settlement "
+                f"{tid} does not appear pending in the provided history."
+            )
+            action = (
+                f"Route to merchant_operations to verify {tid}'s final status before "
+                "promising any correction or revised ETA."
+            )
+        else:
+            summary = (
+                f"Merchant reports a {amount} BDT settlement ({tid}) delayed beyond the "
+                "expected window. Provided history supports settlement follow-up."
+            )
+            action = (
+                f"Route to merchant_operations to verify the settlement batch status for "
+                f"{tid} and communicate an official update."
+            )
         reply = (
             f"We have noted your concern about settlement {tid}. Our merchant "
             "operations team will check the batch status and update you on the "
