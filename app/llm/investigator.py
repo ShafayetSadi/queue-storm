@@ -18,7 +18,7 @@ from app.engine.matcher import MatchResult
 from app.engine.normalizer import NormalizedRequest
 from app.llm.client import LLMClient
 
-_SYSTEM_PROMPT = f"""You are QueueStorm Investigator, an internal copilot for \
+_SYSTEM_PROMPT = """You are QueueStorm Investigator, an internal copilot for \
 digital-finance support agents. You read ONE customer complaint plus a short \
 transaction history plus the deterministic investigation result. You improve the \
 agent-facing and customer-facing wording. You are not the source of truth for \

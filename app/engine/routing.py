@@ -8,7 +8,6 @@ against the public sample pack.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from app.core.constants import DEPARTMENT_BY_CASE_TYPE
 from app.engine.feature_extractor import ComplaintFeatures
