@@ -51,6 +51,15 @@ def _amount_str(norm: NormalizedRequest, match: MatchResult) -> str:
     return "the reported amount"
 
 
+def _counterparty(match: MatchResult) -> str:
+    """Raw counterparty of the matched transaction (e.g. '+8801719876543',
+    'AGENT-318', 'BILLER-DESCO'), or '' when none is available. Used only in the
+    internal-facing agent_summary, never in the customer_reply."""
+    if match.selected and (match.selected.counterparty or "").strip():
+        return match.selected.counterparty.strip()
+    return ""
+
+
 def _confidence(match: MatchResult, verdict: str, case_type: str) -> float:
     if case_type == "phishing_or_social_engineering":
         return 0.95
@@ -81,10 +90,12 @@ def build_text(
     warn = _warning(bangla)
     tid = match.relevant_transaction_id
     amount = _amount_str(norm, match)
+    counterparty = _counterparty(match)
     safe_refund = constants.SAFE_REFUND_LANGUAGE
 
     summary, action, reply = _templates(
-        norm, features, match, case_type, verdict, tid, amount, safe_refund, bangla, warn
+        norm, features, match, case_type, verdict, tid, amount, counterparty,
+        safe_refund, bangla, warn
     )
 
     confidence = _confidence(match, verdict, case_type)
@@ -92,7 +103,7 @@ def build_text(
     return BuiltText(summary, action, reply, confidence, reason_codes)
 
 
-def _templates(norm, features, match, case_type, verdict, tid, amount,
+def _templates(norm, features, match, case_type, verdict, tid, amount, counterparty,
                safe_refund, bangla, warn):  # noqa: ANN001 - internal helper
     # --- Phishing -----------------------------------------------------------
     if case_type == "phishing_or_social_engineering":
@@ -165,11 +176,12 @@ def _templates(norm, features, match, case_type, verdict, tid, amount,
 
     # --- Cases with an identified transaction ------------------------------
     if case_type == "wrong_transfer":
+        cp_to = f" to {counterparty}" if counterparty else ""
         if verdict == "inconsistent":
             summary = (
-                f"Customer claims {tid} ({amount} BDT) was a wrong transfer, but "
-                "history shows prior transfers to the same recipient, suggesting an "
-                "established relationship."
+                f"Customer claims {tid} ({amount} BDT{cp_to}) was a wrong transfer, "
+                "but history shows prior transfers to the same recipient, suggesting "
+                "an established relationship."
             )
             action = (
                 f"Flag for human review. Verify with the customer whether {tid} was "
@@ -178,8 +190,8 @@ def _templates(norm, features, match, case_type, verdict, tid, amount,
             )
         else:
             summary = (
-                f"Customer reports sending {amount} BDT via {tid} to what they now "
-                "believe was the wrong recipient."
+                f"Customer reports sending {amount} BDT via {tid}{cp_to}, which they "
+                "now believe was the wrong recipient."
             )
             action = (
                 f"Verify {tid} details with the customer and initiate the "
@@ -224,9 +236,10 @@ def _templates(norm, features, match, case_type, verdict, tid, amount,
         return summary, action, reply
 
     if case_type == "agent_cash_in_issue":
+        via_cp = f" via {counterparty}" if counterparty else ""
         summary = (
-            f"Customer reports a {amount} BDT agent cash-in ({tid}) not reflected in "
-            "their balance."
+            f"Customer reports a {amount} BDT agent cash-in{via_cp} ({tid}) not "
+            "reflected in their balance."
         )
         action = (
             f"Investigate {tid} status with agent operations. Confirm the settlement "
