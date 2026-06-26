@@ -2,13 +2,17 @@
 
 Flow (single ordered LLM call, deterministic floor):
   normalize -> features -> safety prescan -> deterministic transaction pick ->
-  deterministic baseline (always) -> [optional LLM text enrichment, validated] ->
+  deterministic baseline (evidence, always) -> [optional LLM call: decides the 4
+  keys + writes text, per-field validated against the baseline] ->
   safety sanitize -> final schema validation.
 
-The deterministic engine owns all scored decision fields. The LLM may only
-improve narrative text plus optional confidence / reason codes. If the LLM
-fails validation, the deterministic baseline is returned unchanged. Either way
-the response is always valid and safe.
+The deterministic engine produces the full baseline as *evidence*: it grounds
+the LLM's four decision fields (case_type, evidence_verdict, severity,
+human_review_required) and is the fallback for any field the LLM gets wrong.
+ticket_id / relevant_transaction_id / department stay deterministic (department
+is re-derived from the final case_type). human_review_required is escalate-only:
+a deterministic ``true`` cannot be lowered by the LLM. Either way the response is
+always valid and safe.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from app.engine.feature_extractor import extract_complaint_features
 from app.engine.matcher import MatchResult, select_transaction
 from app.engine.normalizer import NormalizedRequest, normalize_request
 from app.engine.response_builder import build_text
-from app.engine.routing import route_case
+from app.engine.routing import department_for, route_case
 from app.engine.verdict import decide_verdict
 from app.llm.client import LLMClient
 from app.llm.investigator import run_investigator
@@ -54,15 +58,20 @@ def _deterministic_response(
     }
 
 
-def _llm_response(llm: dict, baseline: dict) -> dict:
-    response = dict(baseline)
-    response["agent_summary"] = llm["agent_summary"]
-    response["recommended_next_action"] = llm["recommended_next_action"]
-    response["customer_reply"] = llm["customer_reply"]
-    if llm.get("confidence") is not None:
-        response["confidence"] = llm["confidence"]
-    if llm.get("reason_codes"):
-        response["reason_codes"] = llm["reason_codes"]
+def _merge_llm(llm: dict, baseline: dict) -> dict:
+    """Finalize the per-field-validated LLM result. ``llm`` is already merged
+    over the baseline by ``_validate``; here we apply the deterministic-true
+    review floor and re-derive department from the final case_type."""
+    response = dict(llm)
+    # Escalate-only: the LLM may raise human review, never lower a deterministic
+    # ``true`` (inconsistent / phishing / credential-shared evidence).
+    response["human_review_required"] = bool(
+        llm["human_review_required"]
+    ) or bool(baseline["human_review_required"])
+    # Department is never LLM-chosen; derive it from the final decision.
+    response["department"] = department_for(
+        response["case_type"], response["evidence_verdict"]
+    )
     return response
 
 
@@ -85,10 +94,10 @@ def analyze_ticket(
     source = "deterministic"
     response = baseline
     if settings.llm_enabled:
-        llm = run_investigator(norm, match, client=llm_client)
+        llm = run_investigator(norm, match, baseline, client=llm_client)
         if llm is not None:
-            response = _llm_response(llm, baseline)
-            source = "llm_text"
+            response = _merge_llm(llm, baseline)
+            source = "llm"
         else:
             response = baseline
             source = "deterministic_fallback"

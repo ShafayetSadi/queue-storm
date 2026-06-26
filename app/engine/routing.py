@@ -45,7 +45,9 @@ def _amount_value(norm: NormalizedRequest, match: MatchResult) -> float:
     return max(values) if values else 0.0
 
 
-def _department(case_type: str, verdict: str) -> str:
+def department_for(case_type: str, verdict: str) -> str:
+    """Map a (final) case_type + verdict to its owning department. The single
+    source of truth used by both the deterministic router and the LLM merge."""
     if case_type == "refund_request" and verdict == "inconsistent":
         return "dispute_resolution"
     return DEPARTMENT_BY_CASE_TYPE.get(case_type, "customer_support")
@@ -87,7 +89,7 @@ def route_case(
 ) -> Routing:
     amount = _amount_value(norm, match)
     severity = _severity(case_type, features, amount)
-    department = _department(case_type, verdict)
+    department = department_for(case_type, verdict)
     review = _human_review(case_type, verdict, match, features, amount)
 
     reasons: list[str] = []
