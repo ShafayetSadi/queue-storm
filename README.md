@@ -110,13 +110,18 @@ the critical path for correctness or safety.
 ## Evidence reasoning
 
 - `relevant_transaction_id`: explicit id mention → amount match → duplicate-pair
-  detection → counterparty match → sole-transaction. Ambiguous (multiple equal
-  matches) returns `null`.
+  detection → counterparty/type/time narrowing → sole-transaction. Ambiguous
+  (multiple equal matches) returns `null` instead of guessing.
 - `evidence_verdict`: `consistent` when history supports the complaint;
   `inconsistent` when a relevant transaction exists but contradicts it (e.g. an
-  "established recipient" wrong-transfer, a duplicate claim with only one
-  payment); `insufficient_data` when nothing matches, the match is ambiguous,
-  history is empty for a transaction claim, or the complaint is vague.
+  "established recipient" wrong-transfer, completed payment for a failed-payment
+  claim, duplicate claim with only one payment, completed settlement for a
+  settlement-delay claim, or already-reversed/refunded transaction);
+  `insufficient_data` when nothing matches, the match is ambiguous, history is
+  empty for a transaction claim, or the complaint is vague.
+- Amount extraction ignores time-like numbers such as `2pm` and phone-like bare
+  numbers, while explicit clock mentions can disambiguate the only nearby
+  transaction.
 
 ## Setup & run (local)
 
@@ -195,9 +200,10 @@ BASE_URL=http://localhost:8000 ./scripts/smoke_test.sh
 ```
 
 The suite covers `/health`, schema/enum correctness, sample-case equivalence,
-safety (no credential requests, no refund promises, prompt injection ignored),
-malformed input (no crash), and LLM fallback (the deterministic engine produces
-a valid safe result when the LLM is disabled or fails).
+hidden-style evidence contradictions, ambiguity handling, safety (no credential
+requests, no refund promises, prompt injection ignored), malformed input (no
+crash), and LLM fallback (the deterministic engine produces a valid safe result
+when the LLM is disabled or fails).
 
 ## Deployment / runbook
 

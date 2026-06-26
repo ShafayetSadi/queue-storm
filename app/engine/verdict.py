@@ -40,18 +40,41 @@ def decide_verdict(
 
     # Wrong transfer to an established recipient contradicts the "wrong" claim.
     if case_type == "wrong_transfer":
+        if selected.status in {"failed", "reversed"}:
+            return "inconsistent", ["transfer_not_completed", "evidence_inconsistent"]
         if _same_counterparty_count(norm, selected.counterparty or "") >= 2:
             return "inconsistent", [
                 "established_recipient_pattern", "evidence_inconsistent"
             ]
+
+    if case_type == "payment_failed":
+        if selected.type == "payment" and selected.status == "completed":
+            return "inconsistent", ["payment_completed", "evidence_inconsistent"]
+        if selected.type and selected.type != "payment":
+            return "inconsistent", ["transaction_type_mismatch", "evidence_inconsistent"]
 
     # Duplicate claim but only a single matching payment exists.
     if case_type == "duplicate_payment" and not match.is_duplicate:
         return "inconsistent", ["single_payment_only", "evidence_inconsistent"]
 
     # Refund of an already-reversed transaction contradicts the request.
-    if case_type == "refund_request" and selected.status == "reversed":
-        return "inconsistent", ["already_reversed", "evidence_inconsistent"]
+    if case_type == "refund_request":
+        if selected.status == "reversed":
+            return "inconsistent", ["already_reversed", "evidence_inconsistent"]
+        if selected.type == "refund":
+            return "inconsistent", ["already_refunded", "evidence_inconsistent"]
+
+    if case_type == "merchant_settlement_delay":
+        if selected.status in {"completed", "reversed"}:
+            return "inconsistent", ["settlement_not_pending", "evidence_inconsistent"]
+        if selected.type and selected.type != "settlement":
+            return "inconsistent", ["transaction_type_mismatch", "evidence_inconsistent"]
+
+    if case_type == "agent_cash_in_issue":
+        if selected.type and selected.type != "cash_in":
+            return "inconsistent", ["transaction_type_mismatch", "evidence_inconsistent"]
+        if selected.status in {"failed", "reversed"}:
+            return "inconsistent", ["cash_in_not_active", "evidence_inconsistent"]
 
     # Otherwise the history supports the complaint.
     return "consistent", ["evidence_consistent"]

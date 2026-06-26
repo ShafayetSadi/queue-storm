@@ -63,7 +63,11 @@ def _severity(
 
 
 def _human_review(
-    case_type: str, verdict: str, match: MatchResult, features: ComplaintFeatures
+    case_type: str,
+    verdict: str,
+    match: MatchResult,
+    features: ComplaintFeatures,
+    amount: float,
 ) -> bool:
     if case_type == "phishing_or_social_engineering" or features.credential_shared:
         return True
@@ -71,7 +75,7 @@ def _human_review(
         return True
     # Ambiguous / insufficient: ask for clarification first, no review yet.
     if match.relevant_transaction_id is None:
-        return False
+        return match.ambiguous and amount >= _HIGH_AMOUNT_THRESHOLD
     return case_type in _REVIEW_CASE_TYPES
 
 
@@ -85,7 +89,7 @@ def route_case(
     amount = _amount_value(norm, match)
     severity = _severity(case_type, features, amount)
     department = _department(case_type, verdict)
-    review = _human_review(case_type, verdict, match, features)
+    review = _human_review(case_type, verdict, match, features, amount)
 
     reasons: list[str] = []
     if review:

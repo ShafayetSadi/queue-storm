@@ -24,6 +24,12 @@ _TXN_ID_RE = re.compile(r"\bTXN[-_ ]?\d+\b", re.IGNORECASE)
 _ENTITY_ID_RE = re.compile(r"\b(?:MERCHANT|AGENT|BILLER)[-_][A-Z0-9-]+\b", re.IGNORECASE)
 # Phone numbers: optional +88, then 01XXXXXXXXX (BD mobile).
 _PHONE_RE = re.compile(r"(?:\+?88)?0?1\d{9}\b")
+# Explicit clock mentions such as "2pm", "2 PM", "14:08", or "at 9".
+_TIME_RE = re.compile(
+    r"\b(?:around|at|about|প্রায়|সময়|সময়)?\s*"
+    r"([01]?\d|2[0-3])(?::[0-5]\d)?\s*(am|pm)?\b",
+    re.IGNORECASE,
+)
 # Amount mentions: "5000 taka", "৳5,000", "5k", "1200tk".
 _AMOUNT_RE = re.compile(
     r"(?:৳|tk|taka|bdt|৳\s*)?\s*([\d,]+(?:\.\d+)?)\s*(k\b|taka|tk|৳|bdt|টাকা)?",
@@ -52,6 +58,7 @@ class NormalizedRequest:
     amounts: list[float] = field(default_factory=list)
     phones: list[str] = field(default_factory=list)  # digits-only, last 10
     entity_ids: list[str] = field(default_factory=list)
+    mentioned_hours: list[int] = field(default_factory=list)
     transactions: list[NormalizedTransaction] = field(default_factory=list)
 
     @property
@@ -87,6 +94,10 @@ def _extract_amounts(analysis_text: str) -> list[float]:
     amounts: list[float] = []
     for match in _AMOUNT_RE.finditer(analysis_text):
         number_str, suffix = match.group(1), (match.group(2) or "").lower()
+        before = analysis_text[max(0, match.start() - 1):match.start()]
+        after = analysis_text[match.end():match.end() + 3]
+        if before == ":" or after.startswith(":"):
+            continue
         cleaned = number_str.replace(",", "")
         if not cleaned or cleaned == ".":
             continue
@@ -96,7 +107,14 @@ def _extract_amounts(analysis_text: str) -> list[float]:
             continue
         if suffix == "k":
             value *= 1000
-        # Ignore tiny bare numbers that are likely not amounts (e.g. "2pm").
+        if not suffix and after.strip().startswith(("am", "pm")):
+            continue
+        # Ignore bare phone-like numbers and tiny bare numbers that are likely
+        # times, counts, or dates. Currency-suffixed small amounts still count.
+        if not suffix and value > 1_000_000:
+            continue
+        if not suffix and value <= 24:
+            continue
         if value <= 0:
             continue
         amounts.append(value)
@@ -108,6 +126,23 @@ def _extract_amounts(analysis_text: str) -> list[float]:
             seen.add(amount)
             unique.append(amount)
     return unique
+
+
+def _extract_hours(analysis_text: str) -> list[int]:
+    hours: list[int] = []
+    for match in _TIME_RE.finditer(analysis_text):
+        raw_hour, meridiem = match.group(1), (match.group(2) or "").lower()
+        try:
+            hour = int(raw_hour)
+        except ValueError:
+            continue
+        if meridiem == "pm" and hour < 12:
+            hour += 12
+        elif meridiem == "am" and hour == 12:
+            hour = 0
+        if 0 <= hour <= 23:
+            hours.append(hour)
+    return list(dict.fromkeys(hours))
 
 
 def normalize_transaction(entry: TransactionEntry) -> NormalizedTransaction:
@@ -148,6 +183,7 @@ def normalize_request(request: AnalyzeTicketRequest) -> NormalizedRequest:
         amounts=_extract_amounts(analysis_text),
         phones=list(dict.fromkeys(phones)),
         entity_ids=list(dict.fromkeys(entity_ids)),
+        mentioned_hours=_extract_hours(analysis_text),
         transactions=transactions,
     )
 

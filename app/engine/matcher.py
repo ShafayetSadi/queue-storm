@@ -10,6 +10,7 @@ a wrong dispute).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Optional
 
 from app.engine.feature_extractor import ComplaintFeatures
@@ -17,6 +18,7 @@ from app.engine.normalizer import NormalizedRequest, NormalizedTransaction, phon
 
 _AMOUNT_TOL = 0.5
 _DUPLICATE_WINDOW_SECONDS = 600  # 10 minutes
+_TIME_MATCH_WINDOW = timedelta(hours=1)
 
 
 @dataclass
@@ -80,6 +82,48 @@ def _phone_matches(norm: NormalizedRequest) -> list[NormalizedTransaction]:
             phone_key(t.counterparty_digits) in targets]
 
 
+def _expected_types(features: ComplaintFeatures) -> set[str]:
+    types: set[str] = set()
+    if features.wrong_transfer_language:
+        types.add("transfer")
+    if features.failed_payment_language or features.refund_language:
+        types.add("payment")
+    if features.duplicate_language:
+        types.update({"payment", "transfer"})
+    if features.merchant_settlement_language:
+        types.add("settlement")
+    if features.agent_cash_in_language:
+        types.add("cash_in")
+    return types
+
+
+def _type_narrow(
+    candidates: list[NormalizedTransaction], features: ComplaintFeatures
+) -> list[NormalizedTransaction]:
+    expected = _expected_types(features)
+    if not expected:
+        return candidates
+    narrowed = [t for t in candidates if t.type in expected]
+    return narrowed or candidates
+
+
+def _time_narrow(
+    candidates: list[NormalizedTransaction], norm: NormalizedRequest
+) -> list[NormalizedTransaction]:
+    if not norm.mentioned_hours:
+        return candidates
+    narrowed: list[NormalizedTransaction] = []
+    for t in candidates:
+        if not t.timestamp:
+            continue
+        for hour in norm.mentioned_hours:
+            target = t.timestamp.replace(hour=hour, minute=0, second=0, microsecond=0)
+            if abs(t.timestamp - target) <= _TIME_MATCH_WINDOW:
+                narrowed.append(t)
+                break
+    return narrowed or candidates
+
+
 def select_transaction(
     norm: NormalizedRequest, features: ComplaintFeatures
 ) -> MatchResult:
@@ -121,6 +165,22 @@ def select_transaction(
                 return MatchResult(
                     t.transaction_id, t, candidates, reason="amount_phone_match"
                 )
+            candidates = phone_narrowed or candidates
+
+            type_narrowed = _type_narrow(candidates, features)
+            if len(type_narrowed) == 1:
+                t = type_narrowed[0]
+                return MatchResult(
+                    t.transaction_id, t, candidates, reason="amount_type_match"
+                )
+            candidates = type_narrowed
+
+            time_narrowed = _time_narrow(candidates, norm)
+            if len(time_narrowed) == 1:
+                t = time_narrowed[0]
+                return MatchResult(
+                    t.transaction_id, t, candidates, reason="amount_time_match"
+                )
             # Multiple equally-plausible matches -> do not guess.
             return MatchResult(
                 None, None, candidates, ambiguous=True, reason="ambiguous_amount"
@@ -130,6 +190,7 @@ def select_transaction(
 
     # 3. Counterparty (phone) match when no amount disambiguation was possible.
     phone_hits = _phone_matches(norm)
+    phone_hits = _time_narrow(_type_narrow(phone_hits, features), norm)
     if len(phone_hits) == 1:
         t = phone_hits[0]
         return MatchResult(t.transaction_id, t, phone_hits, reason="counterparty_match")
@@ -137,11 +198,21 @@ def select_transaction(
         return MatchResult(None, None, phone_hits, ambiguous=True,
                            reason="ambiguous_counterparty")
 
-    # 4. Single-transaction history with a concrete (non-vague) complaint:
+    # 4. A concrete complaint with an explicit time can identify the only
+    # nearby transaction even when the customer omits amount/counterparty.
+    time_hits = _time_narrow(_type_narrow(txns, features), norm)
+    if norm.mentioned_hours and len(time_hits) == 1 and features.any_payment_intent:
+        t = time_hits[0]
+        return MatchResult(t.transaction_id, t, time_hits, reason="time_match")
+    if norm.mentioned_hours and 1 < len(time_hits) < len(txns):
+        return MatchResult(None, None, time_hits, ambiguous=True,
+                           reason="ambiguous_time")
+
+    # 5. Single-transaction history with a concrete (non-vague) complaint:
     #    safe to treat that lone transaction as the subject.
     if len(txns) == 1 and not features.vague_language and features.any_payment_intent:
         t = txns[0]
         return MatchResult(t.transaction_id, t, [t], reason="sole_transaction")
 
-    # 5. Nothing reliable to select.
+    # 6. Nothing reliable to select.
     return MatchResult(None, None, list(txns), reason="no_reliable_match")
