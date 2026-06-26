@@ -2,7 +2,22 @@
 
 > Canonical architecture for the SUST CSE Carnival 2026 Codex Community Hackathon preliminary round.
 
-QueueStorm Investigator is a rule-first FastAPI service that exposes `GET /health` and `POST /analyze-ticket`. It receives one synthetic digital-finance support ticket plus recent transaction history, investigates the evidence, and returns the exact JSON decision required by the judge harness.
+> **Implementation note (as built).** The shipped service is an **LLM-primary
+> hybrid**, not rule-first. A single **OpenRouter** (OpenAI-compatible) call is
+> the primary investigator for `case_type`, `evidence_verdict`, `severity`,
+> `human_review_required`, and the free text, and is **ON by default**
+> (`USE_LLM=true`). The deterministic engine described below is built in full and
+> serves as a **validated fallback** (used on LLM timeout/error/invalid output)
+> plus the always-on safety sanitizer and schema validator. Three fields are
+> always deterministic and never produced by the LLM: `ticket_id` (echo),
+> `relevant_transaction_id` (chosen by the matcher from the real history), and
+> `department` (lookup from `case_type`). The LLM call is **single and ordered**
+> (`agent_summary` first, then decisions, then reply) — not multi-agent — because
+> the network round-trip dominates these light classifications. Where the text
+> below says "rule-first / LLM optional / `USE_LLM=false`", read it as describing
+> the fallback layer; the live default is LLM-primary. See `README.md` MODELS.
+
+QueueStorm Investigator is a FastAPI service that exposes `GET /health` and `POST /analyze-ticket`. It receives one synthetic digital-finance support ticket plus recent transaction history, investigates the evidence, and returns the exact JSON decision required by the judge harness.
 
 The architecture optimizes for the actual scoring rubric: evidence reasoning, fintech safety, exact schema, latency, reliability, reproducibility, and clear documentation. It deliberately avoids dashboards, login, databases, payment integrations, large models, and multi-service deployment because those add failure modes without improving preliminary-round scoring.
 
@@ -54,7 +69,7 @@ FastAPI service
 
 Do not split `api` and `ai` services for the preliminary round. The input is small, the transaction history is short, and the judge calls only two endpoints. A modular monolith is easier to deploy, easier to debug, faster, and less likely to fail under hidden tests.
 
-The core system is deterministic and rule-first. Optional LLM support may be added only for language normalization or text polish, disabled by default, with a strict timeout and full fallback. The LLM must never control final enum values, safety policy, schema shape, transaction selection, or refund/reversal language.
+As built, the **LLM is the primary decision-maker** (ON by default) for `case_type`, `evidence_verdict`, `severity`, `human_review_required`, and the free text, via a single ordered OpenRouter call with a strict timeout and full deterministic fallback. The deterministic engine is the validated fallback and the always-on safety/schema layer. The LLM must never control the **safety policy**, the **schema shape**, the **transaction selection** (`relevant_transaction_id`), the **department**, or refund/reversal language — those remain deterministic. LLM enum outputs are accepted only when they exactly match the official enums; otherwise the deterministic baseline is used.
 
 ## 3. Public API
 
@@ -536,32 +551,37 @@ Sanitizer behavior:
 - Replace unauthorized refund/reversal promises with eligibility-and-review language.
 - Add `safe_template_applied` or `prompt_injection_ignored` to `reason_codes` when relevant.
 
-## 15. Optional LLM Policy
+## 15. LLM Policy (as built: LLM-primary)
 
-Default configuration:
+Default configuration (OpenRouter, OpenAI-compatible):
 
 ```env
-USE_LLM=false
-LLM_PROVIDER=
-LLM_API_KEY=
-MODEL_NAME=
-LLM_TIMEOUT_SECONDS=3
+USE_LLM=true
+OPENROUTER_API_KEY=        # required only when USE_LLM=true
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+MODEL_NAME=anthropic/claude-haiku-4.5
+LLM_TIMEOUT_SECONDS=5
 ```
 
-Allowed LLM uses:
+The service degrades gracefully to the deterministic engine when `USE_LLM=false`
+or no API key is present, so it is fully judgeable without any credentials.
 
-- language normalization when Bangla/Banglish rules are uncertain
-- summary polish
-- same-language safe reply polish from a fixed template
+LLM-owned outputs (validated against the official enums; rejected to the
+deterministic baseline on any failure):
 
-Forbidden LLM uses:
+- `case_type`, `evidence_verdict`, `severity`, `human_review_required`
+- `agent_summary`, `recommended_next_action`, `customer_reply` (same language as
+  the complaint)
 
-- final enum selection
-- final transaction selection
-- final evidence verdict
-- final safety decision
-- refund/reversal/account-unblock promises
-- live payment-system calls
+Never owned by the LLM (always deterministic):
+
+- `ticket_id` (echo), `relevant_transaction_id` (matcher), `department` (lookup)
+- the safety policy / sanitizer and final schema validation
+- refund/reversal/account-unblock language and live payment-system calls
+
+Orchestration is a **single ordered call** (`agent_summary` first), not
+multi-agent fan-out: the downstream fields are light classifications, so one
+round-trip is faster, cheaper, and more coherent than parallel sub-agents.
 
 Failure policy:
 
