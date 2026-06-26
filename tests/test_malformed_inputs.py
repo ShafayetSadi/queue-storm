@@ -38,6 +38,18 @@ def test_malformed_transaction_entry_does_not_crash(client):
     assert resp.status_code in (200, 400)
 
 
+def test_boolean_transaction_amount_returns_400(client):
+    resp = client.post(
+        "/analyze-ticket",
+        json={
+            "ticket_id": "TKT-001",
+            "complaint": "I sent 5000 taka to a wrong number around 2pm today.",
+            "transaction_history": [{"amount": False}],
+        },
+    )
+    assert resp.status_code == 400
+
+
 def test_does_not_leak_internal_details_on_error(client):
     resp = client.post("/analyze-ticket", json={"complaint": "x"})
     body = resp.json()

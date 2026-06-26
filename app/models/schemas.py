@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # --- Output enums (exact strings; values are what gets serialized) ----------
@@ -64,6 +64,15 @@ class TransactionEntry(BaseModel):
     counterparty: Optional[str] = None
     status: Optional[str] = None
 
+    @field_validator("amount", mode="before")
+    @classmethod
+    def validate_amount_type(cls, value: Any) -> Any:
+        if value is None:
+            return value
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("amount must be a number")
+        return value
+
 
 class AnalyzeTicketRequest(BaseModel):
     model_config = ConfigDict(
@@ -92,7 +101,11 @@ class AnalyzeTicketRequest(BaseModel):
     )
 
     ticket_id: str = Field(..., description="Unique ticket identifier. Echoed in the response.")
-    complaint: str = Field(..., description="Customer complaint in English, Bangla, or Banglish.")
+    complaint: str = Field(
+        ...,
+        min_length=1,
+        description="Customer complaint in English, Bangla, or Banglish.",
+    )
     language: Optional[str] = Field(None, description="One of: en, bn, mixed.")
     channel: Optional[str] = Field(
         None, description="One of: in_app_chat, call_center, email, merchant_portal, field_agent."
