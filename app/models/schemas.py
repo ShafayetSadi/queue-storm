@@ -100,7 +100,11 @@ class AnalyzeTicketRequest(BaseModel):
         },
     )
 
-    ticket_id: str = Field(..., description="Unique ticket identifier. Echoed in the response.")
+    ticket_id: str = Field(
+        ...,
+        min_length=1,
+        description="Unique ticket identifier. Echoed in the response.",
+    )
     complaint: str = Field(
         ...,
         min_length=1,
@@ -118,6 +122,15 @@ class AnalyzeTicketRequest(BaseModel):
         default_factory=list, description="Recent transactions (typically 2-5). May be empty."
     )
     metadata: Optional[dict[str, Any]] = Field(None, description="Additional simulated context.")
+
+    @field_validator("ticket_id")
+    @classmethod
+    def validate_ticket_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("ticket_id must not be blank")
+        if any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+            raise ValueError("ticket_id must not contain control characters")
+        return value
 
 
 # --- Response model ---------------------------------------------------------
