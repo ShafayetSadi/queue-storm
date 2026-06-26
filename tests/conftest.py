@@ -16,9 +16,8 @@ import pytest
 os.environ.setdefault("USE_LLM", "false")
 os.environ.setdefault("OPENROUTER_API_KEY", "")
 
-from fastapi.testclient import TestClient  # noqa: E402
-
 from app.main import app  # noqa: E402
+from tests.helpers.client import TestClient
 
 _SAMPLES_PATH = Path(__file__).resolve().parent.parent / "docs" / "SUST_Preli_Sample_Cases.json"
 
