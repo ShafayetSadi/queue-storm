@@ -68,16 +68,23 @@ DEPARTMENT_BY_CASE_TYPE = {
 WRONG_TRANSFER_KEYWORDS = (
     "wrong number", "wrong person", "wrong recipient", "wrong account",
     "mistaken", "by mistake", "typed wrong", "reverse it", "reverse the",
-    "sent to the wrong", "bhul number", "bhul manush", "vul number",
-    "ভুল নম্বর", "ভুল মানুষ", "ভুলে পাঠিয়েছি", "ভুল করে", "ফেরত",
+    "sent to the wrong", "wrongly sent", "sent wrong",
+    "bhul number", "bhul manush", "vul number", "bhul kore", "vul kore",
+    "bhul kore pathaisi", "vul kore pathaisi",
+    "ভুল নম্বর", "ভুল নাম্বার", "ভুল নম্বরে", "ভুল নাম্বারে",
+    "ভুল মানুষ", "ভুল একাউন্ট", "ভুল অ্যাকাউন্ট",
+    "ভুলে পাঠিয়েছি", "ভুলে পাঠাইছি", "ভুল করে", "ভুলে সেন্ড", "ফেরত",
 )
 
 FAILED_PAYMENT_KEYWORDS = (
     "failed", "unsuccessful", "did not go through", "didn't go through",
     "transaction failed", "payment failed", "app showed failed",
+    "payment hoy nai", "payment hoyni", "payment hoye nai",
     "balance was deducted", "balance deducted", "money was deducted",
-    "deducted but", "fail hoise", "fail hoyeche", "taka kete",
-    "টাকা কাটা", "কেটে নিয়েছে", "ব্যর্থ", "ফেইল",
+    "deducted but", "deduct hoise", "deducted hoyeche",
+    "fail hoise", "fail hoyeche", "taka kete", "taka kete gese",
+    "টাকা কাটা", "টাকা কেটে গেছে", "টাকা কেটে গিয়েছে",
+    "কেটে নিয়েছে", "কেটে নিয়েছে", "ব্যালেন্স কাটা", "ব্যর্থ", "ফেইল",
 )
 
 REFUND_KEYWORDS = (
@@ -88,8 +95,9 @@ REFUND_KEYWORDS = (
 
 DUPLICATE_KEYWORDS = (
     "twice", "two times", "double", "duplicate", "charged again",
-    "deducted twice", "paid twice", "dui bar", "duibar", "দুইবার",
-    "দুবার", "ডাবল", "দুইবার কাটা",
+    "charged twice", "same payment twice", "deducted twice", "paid twice",
+    "dui bar", "duibar", "duibar payment", "দুইবার",
+    "দুই বার", "দুবার", "ডাবল", "দুইবার কাটা", "দুইবার পেমেন্ট", "দুই বার পেমেন্ট",
 )
 
 MERCHANT_SETTLEMENT_KEYWORDS = (
@@ -106,9 +114,11 @@ AGENT_CASH_IN_KEYWORDS = (
 PHISHING_KEYWORDS = (
     "otp", "pin", "password", "verification code", "security code",
     "called me", "someone called", "sms", "text message", "click this link",
-    "click the link", "account will be blocked", "account blocked",
-    "asked for my", "claiming to be", "scam", "fraud call", "suspicious",
+    "click the link", "link e click", "account will be blocked", "account blocked",
+    "account bondho kore dibe", "bkash theke bolse", "asked for my",
+    "claiming to be", "scam", "fraud call", "suspicious",
     "ওটিপি", "পিন", "পাসওয়ার্ড", "কল", "লিংক", "ব্লক", "প্রতারণা",
+    "কোড চাইছে", "ওটিপি চাইছে", "পিন চাইছে", "লিংকে ক্লিক",
 )
 
 # Language explicitly indicating the customer ALREADY shared a secret.

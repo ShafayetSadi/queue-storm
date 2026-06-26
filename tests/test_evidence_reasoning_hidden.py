@@ -90,7 +90,7 @@ def test_time_like_number_is_not_treated_as_amount(client):
     assert body["evidence_verdict"] == "consistent"
 
 
-def test_multiple_same_amount_transactions_remain_insufficient_without_detail(client):
+def test_multiple_same_amount_transactions_ask_for_clarification_without_detail(client):
     body = _analyze(
         client,
         "I sent 1000 taka and the recipient says it was not received.",
@@ -117,6 +117,81 @@ def test_multiple_same_amount_transactions_remain_insufficient_without_detail(cl
     assert body["relevant_transaction_id"] is None
     assert body["evidence_verdict"] == "insufficient_data"
     assert body["human_review_required"] is False
+
+
+def test_high_value_claim_with_no_matching_transaction_remains_insufficient(client):
+    body = _analyze(
+        client,
+        "I sent 12000 taka to a wrong number and need help.",
+        [
+            {
+                "transaction_id": "TXN-NOMATCH-1",
+                "timestamp": "2026-04-14T10:00:00Z",
+                "type": "transfer",
+                "amount": 500,
+                "counterparty": "+8801711111111",
+                "status": "completed",
+            },
+            {
+                "transaction_id": "TXN-NOMATCH-2",
+                "timestamp": "2026-04-14T11:00:00Z",
+                "type": "payment",
+                "amount": 700,
+                "counterparty": "MERCHANT-1",
+                "status": "completed",
+            },
+        ],
+    )
+
+    assert body["relevant_transaction_id"] is None
+    assert body["evidence_verdict"] == "insufficient_data"
+    assert body["case_type"] == "wrong_transfer"
+    assert body["human_review_required"] is True
+
+
+def test_bangla_wrong_transfer_is_classified_and_matched(client):
+    body = _analyze(
+        client,
+        "আমি ভুল নম্বরে ৫০০০ টাকা পাঠিয়েছি, সাহায্য করুন।",
+        [
+            {
+                "transaction_id": "TXN-BN-1",
+                "timestamp": "2026-04-14T10:00:00Z",
+                "type": "transfer",
+                "amount": 5000,
+                "counterparty": "+8801711111111",
+                "status": "completed",
+            }
+        ],
+        language="bn",
+    )
+
+    assert body["relevant_transaction_id"] == "TXN-BN-1"
+    assert body["case_type"] == "wrong_transfer"
+    assert body["evidence_verdict"] == "consistent"
+    assert body["human_review_required"] is True
+
+
+def test_banglish_failed_payment_is_classified(client):
+    body = _analyze(
+        client,
+        "Payment hoy nai but 700 taka kete gese.",
+        [
+            {
+                "transaction_id": "TXN-BANGLISH-1",
+                "timestamp": "2026-04-14T10:00:00Z",
+                "type": "payment",
+                "amount": 700,
+                "counterparty": "MERCHANT-1",
+                "status": "failed",
+            }
+        ],
+        language="mixed",
+    )
+
+    assert body["relevant_transaction_id"] == "TXN-BANGLISH-1"
+    assert body["case_type"] == "payment_failed"
+    assert body["evidence_verdict"] == "consistent"
 
 
 def test_duplicate_claim_with_one_payment_is_inconsistent(client):

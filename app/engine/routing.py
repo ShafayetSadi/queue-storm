@@ -74,9 +74,10 @@ def _human_review(
         return True
     if verdict == "inconsistent":
         return True
-    # Ambiguous / insufficient: ask for clarification first, no review yet.
+    # Ambiguous / insufficient cases usually ask for clarification first, but
+    # high-value uncertain claims should still be escalated for human review.
     if match.relevant_transaction_id is None:
-        return match.ambiguous and amount >= _HIGH_AMOUNT_THRESHOLD
+        return amount >= _HIGH_AMOUNT_THRESHOLD
     return case_type in _REVIEW_CASE_TYPES
 
 
