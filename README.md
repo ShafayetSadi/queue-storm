@@ -16,6 +16,27 @@ an invalid schema or an unsafe reply.
 
 ---
 
+## Submission deliverables
+
+| Deliverable | Status | Location / notes |
+|---|---:|---|
+| GitHub repository | Done | `https://github.com/ShafayetSadi/queue-storm` — make the repo public or grant organizer access to `bipulhf` before submission. |
+| Hosted endpoint URL | Done | `https://queue-storm-qbfrm.ondigitalocean.app/` |
+| Required API endpoints | Done | `GET /health` and `POST /analyze-ticket` are implemented. Hosted health check: `https://queue-storm-qbfrm.ondigitalocean.app/health`. |
+| Docker image / runbook path | Done | Docker build files are `Dockerfile` and `docker-compose.yml`; redeploy instructions are in [`RUNBOOK.md`](RUNBOOK.md). |
+| Dependency file | Done | [`pyproject.toml`](pyproject.toml) plus locked dependencies in [`uv.lock`](uv.lock). |
+| Sample output file | Done | [`samples/sample_outputs.json`](samples/sample_outputs.json), generated from the public cases in [`docs/SUST_Preli_Sample_Cases.json`](docs/SUST_Preli_Sample_Cases.json). |
+| MODELS section | Done | See [MODELS](#models). It lists every model used, where it runs, and why it was chosen. |
+
+Quick judge commands:
+
+```bash
+curl -fsS https://queue-storm-qbfrm.ondigitalocean.app/health
+uv run python scripts/run_sample_cases.py --base-url https://queue-storm-qbfrm.ondigitalocean.app
+```
+
+---
+
 ## Endpoints (the only two the judge harness exercises)
 
 | Method | Path | Purpose |
@@ -84,9 +105,9 @@ coherent.
 **Cost / reasoning.** No LLM credits are provided by the organizers, so the LLM
 is optional by design. With `USE_LLM=false` (or no API key) the service is 100%
 deterministic, free, and needs no network. With `USE_LLM=true` it makes exactly
-**one** Haiku-class call per ticket (`max_tokens≈900`, `timeout≈5s`), which is
-inexpensive; there is no multi-call or multi-agent fan-out. The LLM is never on
-the critical path for correctness or safety.
+**one** Haiku-class call per ticket (`max_tokens≈900`, `timeout=10s` by
+default), which is inexpensive; there is no multi-call or multi-agent fan-out.
+The LLM is never on the critical path for correctness or safety.
 
 ## Safety logic (enforced deterministically, always)
 
