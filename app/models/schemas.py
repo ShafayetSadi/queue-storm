@@ -197,18 +197,45 @@ class AnalyzeTicketResponse(BaseModel):
     # Serialize enums by value and keep field order matching the spec example.
     model_config = ConfigDict(use_enum_values=True)
 
-    ticket_id: str
+    ticket_id: str = Field(..., min_length=1)
     relevant_transaction_id: Optional[str]
     evidence_verdict: EvidenceVerdict
     case_type: CaseType
     severity: Severity
     department: Department
-    agent_summary: str
-    recommended_next_action: str
-    customer_reply: str
+    agent_summary: str = Field(..., min_length=1)
+    recommended_next_action: str = Field(..., min_length=1)
+    customer_reply: str = Field(..., min_length=1)
     human_review_required: bool
-    confidence: Optional[float] = None
+    confidence: Optional[float] = Field(None, ge=0, le=1)
     reason_codes: Optional[list[str]] = None
+
+    @field_validator(
+        "ticket_id",
+        "relevant_transaction_id",
+        "agent_summary",
+        "recommended_next_action",
+        "customer_reply",
+        mode="before",
+    )
+    @classmethod
+    def validate_response_strings(cls, value: Any, info) -> Any:
+        value = _validate_optional_string(value, info.field_name)
+        if value is not None and not value.strip():
+            raise ValueError(f"{info.field_name} must not be empty")
+        return value
+
+    @field_validator("reason_codes")
+    @classmethod
+    def validate_reason_codes(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return value
+        cleaned: list[str] = []
+        for code in value:
+            if not isinstance(code, str) or not code.strip():
+                raise ValueError("reason_codes must contain non-empty strings")
+            cleaned.append(code.strip())
+        return cleaned
 
 
 class HealthResponse(BaseModel):
