@@ -50,8 +50,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `USE_LLM` | `true` | Set `false` to force the deterministic path. |
 | `OPENROUTER_API_KEY` | *(empty)* | Required only if `USE_LLM=true`. Without it the service runs deterministically. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint. |
-| `MODEL_NAME` | `anthropic/claude-haiku-4.5` | Any OpenRouter model id. |
-| `LLM_TIMEOUT_SECONDS` | `5` | Per-call timeout; well under the 30s harness limit. |
+| `MODEL_NAME` | `google/gemini-2.5-flash-lite` | Any OpenRouter model id. Generally fast and expected to return in under 5 seconds. |
+| `LLM_TIMEOUT_SECONDS` | `4` | Per-call timeout; keeps slow provider responses below the 5s p95 full-credit target before deterministic fallback. |
 
 ## Health & sample verification
 

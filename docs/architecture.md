@@ -293,7 +293,7 @@ HTTP client.
 USE_LLM=true
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-MODEL_NAME=anthropic/claude-haiku-4.5
+MODEL_NAME=google/gemini-2.5-flash-lite
 LLM_TIMEOUT_SECONDS=10
 LLM_MAX_RETRIES=0
 ```

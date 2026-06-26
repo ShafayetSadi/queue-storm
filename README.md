@@ -99,14 +99,14 @@ coherent.
 
 | Model | Where it runs | Role | Why chosen |
 |---|---|---|---|
-| `anthropic/claude-haiku-4.5` (default, configurable via `MODEL_NAME`) | **OpenRouter** (remote, OpenAI-compatible HTTPS API) | **Narrative enricher:** produces `agent_summary`, `recommended_next_action`, `customer_reply`, `confidence`, and extra `reason_codes` in one ordered JSON call. | Fast and low-cost, strong Bangla/Banglish comprehension, reliable JSON output. Swappable to any OpenRouter model (e.g. `openai/gpt-4o-mini`) with no code change. |
+| `google/gemini-2.5-flash-lite` (default, configurable via `MODEL_NAME`) | **OpenRouter** (remote, OpenAI-compatible HTTPS API) | **Narrative enricher:** produces `agent_summary`, `recommended_next_action`, `customer_reply`, `confidence`, and extra `reason_codes` in one ordered JSON call. | Generally very fast, low-cost, strong Bangla/Banglish comprehension, reliable JSON output, and typically returns in under 5 seconds. Swappable to any OpenRouter model (e.g. `openai/gpt-4o-mini`) with no code change. |
 | Deterministic rules engine (no ML model) | **In-process**, local CPU | **Scored decision + safety + fallback.** Selects the relevant transaction, computes structured fields, sanitizes all output, and validates the schema. | Guarantees a fast, safe, schema-perfect 200 even when the LLM is disabled, times out, errors, or returns invalid/unsafe output. |
 
 **Cost / reasoning.** No LLM credits are provided by the organizers, so the LLM
 is optional by design. With `USE_LLM=false` (or no API key) the service is 100%
 deterministic, free, and needs no network. With `USE_LLM=true` it makes exactly
-**one** Haiku-class call per ticket (`max_tokens≈900`, `timeout=10s` by
-default), which is inexpensive; there is no multi-call or multi-agent fan-out.
+**one** Gemini Flash Lite call per ticket (`max_tokens≈900`, `timeout=4s` by
+default), which is inexpensive and generally completes in under 5 seconds; there is no multi-call or multi-agent fan-out.
 The LLM is never on the critical path for correctness or safety.
 
 ## Safety logic (enforced deterministically, always)

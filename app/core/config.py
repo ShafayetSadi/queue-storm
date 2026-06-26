@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     use_llm: bool = True
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    model_name: str = "anthropic/claude-haiku-4.5"
-    llm_timeout_seconds: float = 10.0
+    model_name: str = "google/gemini-2.5-flash-lite"
+    llm_timeout_seconds: float = 4.0
     llm_max_retries: int = 0
     # Optional OpenRouter attribution headers (harmless if blank).
     openrouter_referer: str = "https://github.com/queuestorm-investigator"
