@@ -32,7 +32,7 @@ async def health() -> dict:
         500: {"description": "Controlled internal error (no sensitive details)."},
     },
 )
-async def analyze(payload: AnalyzeTicketRequest):
+def analyze(payload: AnalyzeTicketRequest):
     # Schema is already validated by FastAPI (400 via the validation handler).
     # Only the semantic check remains: an empty complaint -> 422.
     if not (payload.complaint or "").strip():
