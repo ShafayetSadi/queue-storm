@@ -1,7 +1,7 @@
-"""The LLM decides the four reasoning keys and writes the text, grounded on the
-deterministic engine's evidence. It is never load-bearing for safety or schema
-validity: invalid fields are patched per-field from the deterministic baseline,
-a dead client falls back entirely, and human review is escalate-only.
+"""The LLM writes open-ended text, grounded on the deterministic engine's
+evidence. It is never load-bearing for safety, schema validity, or scored
+structured fields: a dead client falls back entirely, and the deterministic
+decision remains authoritative.
 """
 
 from app.core.config import Settings
@@ -20,6 +20,29 @@ WRONG_TRANSFER = AnalyzeTicketRequest(
             "counterparty": "+8801719876543",
             "status": "completed",
         }
+    ],
+)
+
+VAGUE_COMPLAINT = AnalyzeTicketRequest(
+    ticket_id="TKT-006",
+    complaint="Something is wrong with my money. Please check.",
+    transaction_history=[
+        {
+            "transaction_id": "TXN-9601",
+            "timestamp": "2026-04-13T10:00:00Z",
+            "type": "cash_in",
+            "amount": 3000,
+            "counterparty": "AGENT-220",
+            "status": "completed",
+        },
+        {
+            "transaction_id": "TXN-9602",
+            "timestamp": "2026-04-12T15:30:00Z",
+            "type": "transfer",
+            "amount": 800,
+            "counterparty": "+8801911223344",
+            "status": "completed",
+        },
     ],
 )
 
@@ -56,9 +79,9 @@ def test_unavailable_client_falls_back():
     assert "llm_fallback" in (res.reason_codes or [])
 
 
-def test_valid_llm_decisions_are_adopted():
-    # A fully valid LLM answer drives the four decision keys; department is
-    # re-derived from the final case_type, transaction id stays deterministic.
+def test_valid_llm_decisions_do_not_override_structured_fields():
+    # A fully valid LLM answer may enrich the narrative, but scored structured
+    # fields stay deterministic for repeatable sample/hidden harness results.
     payload = {
         "agent_summary": "LLM summary",
         "evidence_verdict": "inconsistent",
@@ -71,18 +94,19 @@ def test_valid_llm_decisions_are_adopted():
         "reason_codes": ["llm_reasoned"],
     }
     res = analyze_ticket(WRONG_TRANSFER, settings=LLM_ON, llm_client=_FakeClient(payload))
-    assert res.case_type == "refund_request"
-    assert res.evidence_verdict == "inconsistent"
-    assert res.severity == "low"
-    assert res.department == "dispute_resolution"  # refund_request + inconsistent
-    assert res.relevant_transaction_id == "TXN-9101"  # deterministic, unchanged
+    assert res.case_type == "wrong_transfer"
+    assert res.evidence_verdict == "consistent"
+    assert res.severity == "high"
+    assert res.department == "dispute_resolution"
+    assert res.relevant_transaction_id == "TXN-9101"
+    assert res.human_review_required is True
     assert res.agent_summary == "LLM summary"
     assert res.confidence == 0.71
     assert "llm_reasoned" in (res.reason_codes or [])
 
 
-def test_invalid_decision_field_is_patched_from_baseline():
-    # One bad enum must not discard the rest of the LLM answer.
+def test_invalid_decision_field_does_not_discard_llm_text():
+    # Bad decision fields are ignored, but usable narrative is still kept.
     payload = {
         "agent_summary": "Good LLM summary kept.",
         "evidence_verdict": "consistent",
@@ -94,13 +118,13 @@ def test_invalid_decision_field_is_patched_from_baseline():
     }
     res = analyze_ticket(WRONG_TRANSFER, settings=LLM_ON, llm_client=_FakeClient(payload))
     assert res.severity == "high"  # deterministic baseline for 5000 wrong_transfer
-    assert res.case_type == "wrong_transfer"  # valid LLM field kept
+    assert res.case_type == "wrong_transfer"
     assert res.agent_summary == "Good LLM summary kept."  # narrative kept
 
 
-def test_human_review_is_escalate_only():
+def test_human_review_stays_deterministic():
     # Deterministic engine flags review (wrong_transfer, pinned txn); the LLM
-    # cannot lower it to false.
+    # cannot lower it to false or raise it on clarification-only cases.
     payload = {
         "agent_summary": "summary",
         "evidence_verdict": "consistent",
@@ -112,6 +136,12 @@ def test_human_review_is_escalate_only():
     }
     res = analyze_ticket(WRONG_TRANSFER, settings=LLM_ON, llm_client=_FakeClient(payload))
     assert res.human_review_required is True
+
+    payload["human_review_required"] = True
+    res = analyze_ticket(VAGUE_COMPLAINT, settings=LLM_ON, llm_client=_FakeClient(payload))
+    assert res.case_type == "other"
+    assert res.evidence_verdict == "insufficient_data"
+    assert res.human_review_required is False
 
 
 def test_text_only_payload_patches_all_decisions_from_baseline():

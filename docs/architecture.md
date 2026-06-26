@@ -69,7 +69,7 @@ FastAPI service
 
 Do not split `api` and `ai` services for the preliminary round. The input is small, the transaction history is short, and the judge calls only two endpoints. A modular monolith is easier to deploy, easier to debug, faster, and less likely to fail under hidden tests.
 
-As built, the **LLM is the primary decision-maker** (ON by default) for `case_type`, `evidence_verdict`, `severity`, `human_review_required`, and the free text, via a single ordered OpenRouter call with a strict timeout and full deterministic fallback. The deterministic engine is the validated fallback and the always-on safety/schema layer. The LLM must never control the **safety policy**, the **schema shape**, the **transaction selection** (`relevant_transaction_id`), the **department**, or refund/reversal language — those remain deterministic. LLM enum outputs are accepted only when they exactly match the official enums; otherwise the deterministic baseline is used.
+As built, the **deterministic engine is authoritative** for scored structured fields: `relevant_transaction_id`, `evidence_verdict`, `case_type`, `department`, `severity`, and `human_review_required`. The LLM is ON by default when configured, but it enriches the free text via a single ordered OpenRouter call with a strict timeout and full deterministic fallback. The LLM must never control the **safety policy**, the **schema shape**, the **transaction selection**, the **department**, or refund/reversal language — those remain deterministic.
 
 ## 3. Public API
 

@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     model_name: str = "anthropic/claude-haiku-4.5"
-    llm_timeout_seconds: float = 5.0
-    llm_max_retries: int = 1
+    llm_timeout_seconds: float = 10.0
+    llm_max_retries: int = 0
     # Optional OpenRouter attribution headers (harmless if blank).
     openrouter_referer: str = "https://github.com/queuestorm-investigator"
     openrouter_title: str = "QueueStorm Investigator"

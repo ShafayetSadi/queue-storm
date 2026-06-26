@@ -7,12 +7,9 @@ Flow (single ordered LLM call, deterministic floor):
   safety sanitize -> final schema validation.
 
 The deterministic engine produces the full baseline as *evidence*: it grounds
-the LLM's four decision fields (case_type, evidence_verdict, severity,
-human_review_required) and is the fallback for any field the LLM gets wrong.
-ticket_id / relevant_transaction_id / department stay deterministic (department
-is re-derived from the final case_type). human_review_required is escalate-only:
-a deterministic ``true`` cannot be lowered by the LLM. Either way the response is
-always valid and safe.
+the response's structured decision fields. The LLM can enrich the narrative
+fields, confidence, and reason labels, but the scored/routing fields remain
+deterministic so repeated runs do not vary with model judgement.
 """
 
 from __future__ import annotations
@@ -59,16 +56,24 @@ def _deterministic_response(
 
 
 def _merge_llm(llm: dict, baseline: dict) -> dict:
-    """Finalize the per-field-validated LLM result. ``llm`` is already merged
-    over the baseline by ``_validate``; here we apply the deterministic-true
-    review floor and re-derive department from the final case_type."""
-    response = dict(llm)
-    # Escalate-only: the LLM may raise human review, never lower a deterministic
-    # ``true`` (inconsistent / phishing / credential-shared evidence).
-    response["human_review_required"] = bool(
-        llm["human_review_required"]
-    ) or bool(baseline["human_review_required"])
-    # Department is never LLM-chosen; derive it from the final decision.
+    """Keep deterministic structured fields and LLM narrative enrichment.
+
+    The public and hidden harnesses score structured fields as single-answer
+    values. Letting a remote model override those fields makes otherwise correct
+    runs nondeterministic, so the LLM is restricted to open-ended fields.
+    """
+    response = dict(baseline)
+    for field in (
+        "agent_summary",
+        "recommended_next_action",
+        "customer_reply",
+        "confidence",
+        "reason_codes",
+    ):
+        if field in llm:
+            response[field] = llm[field]
+
+    # Department is never LLM-chosen; derive it from the deterministic decision.
     response["department"] = department_for(
         response["case_type"], response["evidence_verdict"]
     )

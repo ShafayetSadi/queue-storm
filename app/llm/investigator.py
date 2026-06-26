@@ -1,15 +1,15 @@
-"""LLM investigator: a single ordered call that decides and writes the answer.
+"""LLM investigator: a single ordered call that enriches the answer text.
 
 The model receives the complaint (clearly marked as untrusted data), the
 transaction history, and the deterministic engine's investigation as grounded
-evidence. The model is the decision-maker for FOUR keys — ``evidence_verdict``,
-``case_type``, ``severity``, ``human_review_required`` — and writes all narrative
-fields, investigating before it decides (``agent_summary`` first).
+evidence. The deterministic engine remains authoritative for scored structured
+fields; the model writes narrative fields and may echo the deterministic
+decision fields for traceability.
 
 ``ticket_id``, ``relevant_transaction_id`` and ``department`` are NOT decided by
 the model; the caller fills them deterministically. Per-field validation patches
-any invalid decision back to the deterministic baseline, so the response is
-always valid even if the model errs on one field.
+any invalid model output back to the deterministic baseline, so the response is
+always valid even if the model errs.
 """
 
 from __future__ import annotations
@@ -29,8 +29,9 @@ _SEVERITIES = {e.value for e in Severity}
 _SYSTEM_PROMPT = """You are QueueStorm Investigator, an internal copilot for \
 digital-finance support agents. You read ONE customer complaint plus a short \
 transaction history plus a deterministic engine's investigation. You are the \
-decision-maker: you decide the structured verdict and write the agent-facing and \
-customer-facing text, grounded in the transaction evidence.
+writer: use the deterministic investigation as the authoritative structured \
+decision and write the agent-facing and customer-facing text, grounded in the \
+transaction evidence.
 
 Return ONLY a JSON object with EXACTLY these keys, in this order:
 1. "agent_summary": 1-2 sentence factual summary of the case (write this FIRST,
@@ -47,10 +48,10 @@ phishing_or_social_engineering | other.
 9. "reason_codes": a short array of snake_case labels.
 
 DECISION RULES:
-- The deterministic investigation is a strong, evidence-based prior. Normally \
-adopt its case_type / evidence_verdict / severity / human_review_required. \
-Override only when the transaction history gives you a clear, specific reason, \
-and name that reason in reason_codes.
+- The deterministic investigation is authoritative for case_type, \
+evidence_verdict, severity, and human_review_required. Echo those suggested \
+values in your JSON unless the suggestion is missing or not one of the allowed \
+enum values.
 - evidence_verdict reflects whether the history supports the complaint: \
 "inconsistent" when a relevant transaction exists but the pattern or status \
 contradicts the claim (e.g. an "established recipient" wrong-transfer, or a \
@@ -148,12 +149,12 @@ def _valid_enum(value, allowed: set[str], fallback: str) -> str:
 
 def _validate(data: dict, baseline: dict) -> dict:
     """Merge the model's answer onto the deterministic baseline with per-field
-    validation: each LLM field is kept only if valid, otherwise the baseline's
-    value is patched in. Always returns a full, valid response dict."""
+    validation. The caller decides which validated fields may affect the final
+    response. Always returns a full, valid response dict."""
     result = dict(baseline)
 
-    # The four decision keys: adopt the model's value only when it is a legal
-    # enum / bool, else keep the deterministic baseline's value.
+    # Decision echoes: keep only legal enum / bool values. The analyzer still
+    # treats deterministic structured fields as authoritative.
     result["case_type"] = _valid_enum(
         data.get("case_type"), _CASE_TYPES, baseline["case_type"]
     )
